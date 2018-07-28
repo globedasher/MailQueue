@@ -94,6 +94,8 @@ class MailQueue():
 
     def print_nodes(self):
         print("Print Nodes")
+        if not self.head:
+            print("No nodes")
         currentNode = self.head
         node_number = 0
         while currentNode:
@@ -191,8 +193,10 @@ def comms_loop(send_pipe):
     listen_socket = listen_context.socket(zmq.REP)
     listen_socket.bind("ipc:///tmp/mail_queue_ipc")
 
+
     while True:
-        message = listen_socket.recv()
+
+        #message = listen_socket.recv()
         #print("Received request: %s" % message)
         listen_socket.send(b"World")
 
@@ -202,26 +206,44 @@ def comms_loop(send_pipe):
         if message == "insert":
             #print("Over here")
             send_pipe.send("insert")
+        elif message == "list":
+            send_pipe.send("list")
         #sys.exit()
 
 def main_loop(mail_queue, streams, recv_pipe):
     print("main_loop")
+
+    listen_context = zmq.Context()
+    listen_socket = listen_context.socket(zmq.REP)
+    listen_socket.bind("ipc:///tmp/mail_queue_ipc")
+    poller = zmq.Poller()
+    poller.register(listen_socket)
+
     ident = 0
     while True:
-        # This is the main loop of the program. One of the functions run by it will
-        # need to check for any interrupt signals.
-        if recv_pipe.poll():
-            message = recv_pipe.recv()
+        try:
+            socks = dict(poller.poll(zmq.NOBLOCK))
+        except KeyboardInterrupt:
+            break
+
+        if listen_socket in socks:
+            message = listen_socket.recv()
+            print(message)
+            listen_socket.send(b"World")
             print("Received message: %s" % message)
-            if message == "insert":
+            message = message.decode("utf-8")
+            if str(message) == "insert":
                 #print("insert")
                 data = datetime.datetime.now()
-                offset = datetime.timedelta(seconds = 2)
+                offset = datetime.timedelta(seconds = 5)
                 data = data + offset
                 mail_queue.insert(data, ident)
                 ident += 1
+            elif message == "list":
+                mail_queue.print_nodes()
 
         mail_queue.expire()
+        #print("Done?")
         time.sleep(.1)
         if not mail_queue.head:
             #streams.close()
@@ -240,20 +262,26 @@ def process_init(tests):
     mail_queue = MailQueue()
     if tests:
         mail_queue = test_inserts(mail_queue, tests)
-        #mail_queue.print_nodes()
+       #mail_queue.print_nodes()
 
     recv_pipe, send_pipe = Pipe()
-    comms_loop_process = Process(target=comms_loop, args=(send_pipe, ))
-    comms_loop_process.start()
+    # To start threads, you have to use this silly syntax to pass the target
+    # function to run in the thread and the arguments also need this silly
+    # context where a single parameter is in a tupple with a free element
+    # after.
+
+    #comms_loop_process = Process(target=comms_loop, args=(send_pipe, ))
+    #comms_loop_process.start()
 
     mail_queue_process = Process(target=main_loop
                        , args=(mail_queue, streams, recv_pipe))
     mail_queue_process.start()
 
-def controls():
+def controls(param=None):
     """
     Controls to interact with a running instance of this process.
     """
+    print("Param!!", param)
 
     context = zmq.Context()
 
@@ -265,7 +293,7 @@ def controls():
 
     for request in range(2):
         print("Sending request %s" % request)
-        socket.send(b"insert")
+        socket.send_string(param)
 
         message = socket.recv()
         print("Recieved reply %s [ %s ]" % (request, message))
@@ -278,11 +306,19 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
 
-    help_text = """The control selector can be set to either 'process' or 'control'. 'process' will run the main loop of the process. 'control' will send commands to an instance of the process. """
-    parser.add_argument("-s"
-                        , "--selector"
-                        , dest="selector"
+    help_text = """The process flag can be set to 'True' to run the main process loop."""
+    parser.add_argument("-p"
+                        , "--process"
+                        , dest="process"
                         , default=""
+                        , help=help_text
+                        )
+
+    help_text = """The control selector can be set to either 'process' or 'control'. 'process' will run the main loop of the process. 'control' will send commands to an instance of the process. """
+    parser.add_argument("-c"
+                        , "--control"
+                        , dest="control"
+                        , default=None
                         , help=help_text
                         )
 
@@ -301,12 +337,12 @@ def main():
     args = get_args()
     print(args)
 
-    if args.selector == "process":
+    if args.process == "t":
         #print("process")
         process_init(args.tests)
-    elif args.selector == "control":
+    elif args.control != None:
         #print("controls")
-        controls()
+        controls(args.control)
     else:
         # This else will allow dev to run this script with no args to just run
         # test insert.
@@ -315,7 +351,7 @@ def main():
         test_queue = test_inserts(test_queue, 5)
         test_queue.print_nodes()
 
-    if args.selector != "process":
+    if args.process != "t":
         print("End")
 
 if __name__ == "__main__":
