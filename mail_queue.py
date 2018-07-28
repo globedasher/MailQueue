@@ -82,7 +82,9 @@ class MailQueue():
         on the new value. If is not in the queue, it will be added at correct
         location.
         """
-        print("Insert", value, ident)
+        print("Insert", value
+             ,"Ident", ident
+             )
         found_on_next_node = self._pop_node(ident)
         # if found_on_next_node:
         #     print("Found node:"
@@ -98,13 +100,14 @@ class MailQueue():
             print("No nodes")
         currentNode = self.head
         node_number = 0
+        return_list = ""
         while currentNode:
-            print("Date:", currentNode.value
-                 ,"Ident:", currentNode.ident
-                 ,"Node number:", node_number
-                 )
+            print(str(currentNode.value), str(currentNode.ident), str(node_number))
+            return_list += ("Date: %s, Ident: %s, Node number: %s\n" % (currentNode.value, currentNode.ident, node_number))
+            print(return_list)
             currentNode = currentNode.next_node
             node_number += 1
+        return return_list
 
     def end_node(self):
         print("End Node")
@@ -117,7 +120,9 @@ class MailQueue():
     def expire(self):
         #print("Check for expired node")
         if self.head and self.head.value <= datetime.datetime.now():
-            print("Expiring node", self.head.value, self.head.ident)
+            print("Date:", self.head.value
+                 ,"Ident:", self.head.ident
+                 )
             self.head = self.head.next_node
         else:
             #print("No nodes to expire")
@@ -210,7 +215,7 @@ def comms_loop(send_pipe):
             send_pipe.send("list")
         #sys.exit()
 
-def main_loop(mail_queue, streams, recv_pipe):
+def main_loop(mail_queue, streams):
     print("main_loop")
 
     listen_context = zmq.Context()
@@ -219,29 +224,35 @@ def main_loop(mail_queue, streams, recv_pipe):
     poller = zmq.Poller()
     poller.register(listen_socket)
 
-    ident = 0
     while True:
+
+        ## POLL COMMS
         try:
-            socks = dict(poller.poll(zmq.NOBLOCK))
+            socks = dict(poller.poll(zmq.DONTWAIT))
         except KeyboardInterrupt:
             break
-
         if listen_socket in socks:
             message = listen_socket.recv()
-            print(message)
-            listen_socket.send(b"World")
+            print("237")
             print("Received message: %s" % message)
             message = message.decode("utf-8")
-            if str(message) == "insert":
+            command, ident = message.split(":")
+            print(command, ident)
+            if command == "insert":
                 #print("insert")
                 data = datetime.datetime.now()
-                offset = datetime.timedelta(seconds = 5)
+                offset = datetime.timedelta(days = 5)
                 data = data + offset
                 mail_queue.insert(data, ident)
-                ident += 1
-            elif message == "list":
-                mail_queue.print_nodes()
+                listen_socket.send_string("0")
+            elif command == "list":
+                return_list = mail_queue.print_nodes()
+                print(return_list)
+                listen_socket.send_string(return_list)
+            else:
+                pass
 
+        ## EXPIRE
         mail_queue.expire()
         #print("Done?")
         time.sleep(.1)
@@ -264,7 +275,7 @@ def process_init(tests):
         mail_queue = test_inserts(mail_queue, tests)
        #mail_queue.print_nodes()
 
-    recv_pipe, send_pipe = Pipe()
+    send_pipe = Pipe()
     # To start threads, you have to use this silly syntax to pass the target
     # function to run in the thread and the arguments also need this silly
     # context where a single parameter is in a tupple with a free element
@@ -274,14 +285,14 @@ def process_init(tests):
     #comms_loop_process.start()
 
     mail_queue_process = Process(target=main_loop
-                       , args=(mail_queue, streams, recv_pipe))
+                       , args=(mail_queue, streams))
     mail_queue_process.start()
 
-def controls(param=None):
+def insert(param=None):
     """
-    Controls to interact with a running instance of this process.
+    Send an insert command to the process.
     """
-    print("Param!!", param)
+    print("Insert id", param)
 
     context = zmq.Context()
 
@@ -290,14 +301,30 @@ def controls(param=None):
     rc = socket.connect("ipc:///tmp/mail_queue_ipc")
     #print(rc)
 
+    print("Sending insert for ident %s" % param)
+    command = "insert: %s" % (param)
+    socket.send_string(command)
 
-    for request in range(2):
-        print("Sending request %s" % request)
-        socket.send_string(param)
+    message = socket.recv()
+    print("Recieved reply %s" % (message))
 
-        message = socket.recv()
-        print("Recieved reply %s [ %s ]" % (request, message))
-        time.sleep(1)
+def print_list():
+    """
+    Get the queue
+    """
+    context = zmq.Context()
+
+    print("Transmitting commands to process.")
+    socket = context.socket(zmq.REQ)
+    rc = socket.connect("ipc:///tmp/mail_queue_ipc")
+    #print(rc)
+
+    command = "list:"
+    socket.send_string(command)
+
+    message = socket.recv()
+    message = message.decode("utf-8")
+    print("Recieved reply %s" % (message))
 
 def get_args():
     """
@@ -306,19 +333,26 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
 
-    help_text = """The process flag can be set to 'True' to run the main process loop."""
-    parser.add_argument("-p"
-                        , "--process"
+    help_text = """Run as a process."""
+    parser.add_argument(  "--runprocess"
                         , dest="process"
-                        , default=""
+                        , action="store_true"
                         , help=help_text
                         )
 
-    help_text = """The control selector can be set to either 'process' or 'control'. 'process' will run the main loop of the process. 'control' will send commands to an instance of the process. """
-    parser.add_argument("-c"
-                        , "--control"
-                        , dest="control"
+    help_text = """Insert a value with an ident."""
+    parser.add_argument("-i"
+                        , "--insert"
+                        , dest="insert"
                         , default=None
+                        , help=help_text
+                        )
+
+    help_text = """See all nodes in queue."""
+    parser.add_argument("-p"
+                        , "--print"
+                        , dest="print_list"
+                        , action="store_true"
                         , help=help_text
                         )
 
@@ -337,12 +371,12 @@ def main():
     args = get_args()
     print(args)
 
-    if args.process == "t":
-        #print("process")
+    if args.process:
         process_init(args.tests)
-    elif args.control != None:
-        #print("controls")
-        controls(args.control)
+    elif args.insert:
+        insert(args.insert)
+    elif args.print_list:
+        print_list()
     else:
         # This else will allow dev to run this script with no args to just run
         # test insert.
@@ -350,9 +384,6 @@ def main():
         test_queue = test_inserts(test_queue, 10)
         test_queue = test_inserts(test_queue, 5)
         test_queue.print_nodes()
-
-    if args.process != "t":
-        print("End")
 
 if __name__ == "__main__":
     main()
