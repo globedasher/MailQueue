@@ -82,9 +82,7 @@ class MailQueue():
         on the new value. If is not in the queue, it will be added at correct
         location.
         """
-        print("Insert", value
-             ,"Ident", ident
-             )
+        #print("Insert", value,"Ident", ident)
         found_on_next_node = self._pop_node(ident)
         # if found_on_next_node:
         #     print("Found node:"
@@ -102,9 +100,9 @@ class MailQueue():
         node_number = 0
         return_list = ""
         while currentNode:
-            print(str(currentNode.value), str(currentNode.ident), str(node_number))
+            #print(str(currentNode.value), str(currentNode.ident), str(node_number))
             return_list += ("Date: %s, Ident: %s, Node number: %s\n" % (currentNode.value, currentNode.ident, node_number))
-            print(return_list)
+            #print(return_list)
             currentNode = currentNode.next_node
             node_number += 1
         return return_list
@@ -120,7 +118,7 @@ class MailQueue():
     def expire(self):
         #print("Check for expired node")
         if self.head and self.head.value <= datetime.datetime.now():
-            print("Date:", self.head.value
+            print("Expire Date:", self.head.value
                  ,"Ident:", self.head.ident
                  )
             self.head = self.head.next_node
@@ -233,11 +231,10 @@ def main_loop(mail_queue, streams):
             break
         if listen_socket in socks:
             message = listen_socket.recv()
-            print("237")
             print("Received message: %s" % message)
             message = message.decode("utf-8")
             command, ident = message.split(":")
-            print(command, ident)
+            #print(command, ident)
             if command == "insert":
                 #print("insert")
                 data = datetime.datetime.now()
@@ -247,8 +244,11 @@ def main_loop(mail_queue, streams):
                 listen_socket.send_string("0")
             elif command == "list":
                 return_list = mail_queue.print_nodes()
-                print(return_list)
-                listen_socket.send_string(return_list)
+                print("return_list", return_list)
+                if len(return_list) == 0:
+                    listen_socket.send_string("No nodes")
+                else:
+                    listen_socket.send_string(return_list)
             else:
                 pass
 
@@ -260,8 +260,6 @@ def main_loop(mail_queue, streams):
             #streams.close()
             #break
             pass
-
-    mail_queue.print_nodes()
 
 def process_init(tests):
     print("Starting as process")
@@ -306,7 +304,7 @@ def insert(param=None):
     socket.send_string(command)
 
     message = socket.recv()
-    print("Recieved reply %s" % (message))
+    print("Received reply: %s" % (message))
 
 def print_list():
     """
@@ -324,7 +322,7 @@ def print_list():
 
     message = socket.recv()
     message = message.decode("utf-8")
-    print("Recieved reply %s" % (message))
+    print("Received reply: %s" % (message))
 
 def get_args():
     """
