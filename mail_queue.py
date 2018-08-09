@@ -42,7 +42,6 @@ class MailQueue():
                 return currentNode
             currentNode = currentNode.next_node
 
-
     def _pop_node(self, ident):
         #print("_pop_node")
         if not self.head:
@@ -137,17 +136,17 @@ class MailQueue():
         self._insert_node(date, ident)
 
     def read(self, message):
-        print("Read method")
+        #print("Read method")
         print(message)
         command, ident = message.split(":")
-        print("read", ident)
+        #print("read", ident)
         node = self._find_node(ident)
         print(node.date, node.ident)
         return node
 
     def update(self, message):
-        print("Update")
-        print(message)
+        #print("Update")
+        #print(message)
         command, ident = message.split(":")
         date = datetime.datetime.now()
         offset = datetime.timedelta(days = 5)
@@ -157,9 +156,9 @@ class MailQueue():
         self._insert_node(date, ident)
 
     def delete(self, message):
-        print(message)
+        #print(message)
         command, ident = message.split(":")
-        print("Delete", ident)
+        #print("Delete", ident)
         found_on_next_node = self._pop_node(ident)
 
 
@@ -235,7 +234,6 @@ class ControlComms():
 
 
 class MailClient():
-
     def __init__(self):
         print("Init MailClient")
 
@@ -407,14 +405,14 @@ def get_args():
     """
     parser = argparse.ArgumentParser()
 
-    help_text = """Run as a process."""
+    help_text = """Run as a process. This will automatically accept commands from the inter-process API."""
     parser.add_argument(  "--runprocess"
                         , dest="process"
                         , action="store_true"
                         , help=help_text
                         )
 
-    help_text = """Create a value with an ident."""
+    help_text = """--create <ident> to create a new node in the mail_queue."""
     parser.add_argument("-c"
                         , "--create"
                         , dest="create"
@@ -422,7 +420,7 @@ def get_args():
                         , help=help_text
                         )
 
-    help_text = """Read a node in the queue."""
+    help_text = """--read <ident> to return information from one node in the queue."""
     parser.add_argument(  "-r"
                         , "--read"
                         , dest="read_node"
@@ -430,14 +428,14 @@ def get_args():
                         , help=help_text
                         )
 
-    help_text = """See all nodes in queue."""
+    help_text = """Return data from all nodes in the queue."""
     parser.add_argument(  "--read-queue"
                         , dest="read_queue"
                         , action="store_true"
                         , help=help_text
                         )
 
-    help_text = """Update a value with an ident."""
+    help_text = """--update <ident> to update the date of a specific node."""
     parser.add_argument("-u"
                         , "--update"
                         , dest="update"
@@ -445,7 +443,7 @@ def get_args():
                         , help=help_text
                         )
 
-    help_text = """Delete a value with an ident."""
+    help_text = """--delete <ident> to remove a specific node from the queue."""
     parser.add_argument("-d"
                         , "--delete"
                         , dest="delete"
@@ -453,7 +451,7 @@ def get_args():
                         , help=help_text
                         )
 
-    help_text = "Use -t or --tests to run test creates on startup."
+    help_text = "--tests <int> will run test creates on startup."
     parser.add_argument("-t"
                         , "--tests"
                         , type=int
