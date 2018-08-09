@@ -3,7 +3,7 @@
 #
 ###############################################################################
 
-import datetime, signal, subprocess, sys, zmq, time, argparse
+import datetime, signal, subprocess, sys, zmq, time, argparse, pprint
 from multiprocessing import Process, Pipe
 from py_core import logger
 
@@ -75,14 +75,14 @@ class MailQueue():
                     break
                 currentNode = currentNode.next_node
 
-    def insert(self, value, ident):
+    def create(self, value, ident):
         """
-        Insert a value into the queue.  If a node with the specified ident is
+        Create a value into the queue.  If a node with the specified ident is
         in the queue, it will be removed and a new node will be created based
         on the new value. If is not in the queue, it will be added at correct
         location.
         """
-        #print("Insert", value,"Ident", ident)
+        #print("Create", value,"Ident", ident)
         found_on_next_node = self._pop_node(ident)
         # if found_on_next_node:
         #     print("Found node:"
@@ -91,23 +91,41 @@ class MailQueue():
         #          )
         self._insert_node(value, ident)
 
+    def update(self, value, ident):
+        self.create(value, ident)
 
-    def print_nodes(self):
-        print("Print Nodes")
+    def read_nodes(self):
+        """
+        This method will return a dictionary with all the nodes currently in
+        the queue.
+        """
+        #print("Read Nodes")
+        return_dict = {}
         if not self.head:
-            print("No nodes")
+            return(return_dict)
         currentNode = self.head
         node_number = 0
-        return_list = ""
         while currentNode:
             #print(str(currentNode.value), str(currentNode.ident), str(node_number))
-            return_list += ("Date: %s, Ident: %s, Node number: %s\n" % (currentNode.value, currentNode.ident, node_number))
-            #print(return_list)
+
+            # Create a nested dictionary for each node in the queue
+            return_node = {
+                    "date": currentNode.value,
+                    "ident": currentNode.ident,
+                    }
+
+            # Add the new sub dictionary to the return_dict.
+            return_dict[str(node_number)] = return_node
+            # Advance to the next node
             currentNode = currentNode.next_node
             node_number += 1
-        return return_list
+            #print(node_number)
+        return str(return_dict)
 
     def end_node(self):
+        """cnsert
+        I don't know why I built this...
+        """
         print("End Node")
         currentNode = self.head
         while currentNode:
@@ -116,6 +134,9 @@ class MailQueue():
             currentNode = currentNode.next_node
 
     def expire(self):
+        """
+        This method expires nodes.
+        """
         #print("Check for expired node")
         if self.head and self.head.value <= datetime.datetime.now():
             print("Expire Date:", self.head.value
@@ -186,7 +207,7 @@ def test_inserts(mail_queue, tests):
         offset = datetime.timedelta(seconds = value + 0)
         data = data + offset
         ident = tests - value
-        mail_queue.insert(data, ident)
+        mail_queue.create(data, ident)
     return mail_queue
 
 def comms_loop(send_pipe):
@@ -206,11 +227,11 @@ def comms_loop(send_pipe):
         #print("Here")
         message = message.decode("utf-8")
         #print(message)
-        if message == "insert":
+        if message == "create":
             #print("Over here")
-            send_pipe.send("insert")
-        elif message == "list":
-            send_pipe.send("list")
+            send_pipe.send("create")
+        elif message == "read_queue":
+            send_pipe.send("read_queue")
         #sys.exit()
 
 def main_loop(mail_queue, streams):
@@ -235,20 +256,21 @@ def main_loop(mail_queue, streams):
             message = message.decode("utf-8")
             command, ident = message.split(":")
             #print(command, ident)
-            if command == "insert":
-                #print("insert")
+            if command == "create":
+                #print("create")
                 data = datetime.datetime.now()
                 offset = datetime.timedelta(days = 5)
                 data = data + offset
-                mail_queue.insert(data, ident)
+                mail_queue.create(data, ident)
                 listen_socket.send_string("0")
-            elif command == "list":
-                return_list = mail_queue.print_nodes()
-                print("return_list", return_list)
-                if len(return_list) == 0:
-                    listen_socket.send_string("No nodes")
-                else:
-                    listen_socket.send_string(return_list)
+            elif command == "read_queue":
+                listen_socket.send_string(str(mail_queue.read_nodes()))
+                #return_dict = mail_queue.read_nodes()
+                #print("return_list", return_list)
+                #if len(return_list) == 0:
+                    #listen_socket.send_string("No nodes")
+                #else:
+                    #listen_socket.send_string(return_list)
             else:
                 pass
 
@@ -271,7 +293,7 @@ def process_init(tests):
     mail_queue = MailQueue()
     if tests:
         mail_queue = test_inserts(mail_queue, tests)
-       #mail_queue.print_nodes()
+       #mail_queue.read_nodes()
 
     send_pipe = Pipe()
     # To start threads, you have to use this silly syntax to pass the target
@@ -286,11 +308,11 @@ def process_init(tests):
                        , args=(mail_queue, streams))
     mail_queue_process.start()
 
-def insert(param=None):
+def create(param=None):
     """
-    Send an insert command to the process.
+    Send an create command to the process.
     """
-    print("Insert id", param)
+    print("Create id", param)
 
     context = zmq.Context()
 
@@ -299,14 +321,14 @@ def insert(param=None):
     rc = socket.connect("ipc:///tmp/mail_queue_ipc")
     #print(rc)
 
-    print("Sending insert for ident %s" % param)
-    command = "insert: %s" % (param)
+    print("Sending create for ident %s" % param)
+    command = "create: %s" % (param)
     socket.send_string(command)
 
     message = socket.recv()
     print("Received reply: %s" % (message))
 
-def print_list():
+def read_queue():
     """
     Get the queue
     """
@@ -317,12 +339,16 @@ def print_list():
     rc = socket.connect("ipc:///tmp/mail_queue_ipc")
     #print(rc)
 
-    command = "list:"
+    command = "read_queue:"
     socket.send_string(command)
 
     message = socket.recv()
     message = message.decode("utf-8")
-    print("Received reply: %s" % (message))
+    message = eval(message)
+    #print(type(message))
+    #print("Received reply: %s" % (message))
+    printer = pprint.PrettyPrinter(indent=4)
+    printer.pprint(message)
 
 def get_args():
     """
@@ -338,23 +364,39 @@ def get_args():
                         , help=help_text
                         )
 
-    help_text = """Insert a value with an ident."""
-    parser.add_argument("-i"
-                        , "--insert"
-                        , dest="insert"
+    help_text = """Create a value with an ident."""
+    parser.add_argument("-c"
+                        , "--create"
+                        , dest="create"
                         , default=None
                         , help=help_text
                         )
 
     help_text = """See all nodes in queue."""
-    parser.add_argument("-p"
-                        , "--print"
-                        , dest="print_list"
+    parser.add_argument(  "-r"
+                        , "--read-queue"
+                        , dest="read_queue"
                         , action="store_true"
                         , help=help_text
                         )
 
-    help_text = "Use -t or --tests to run test inserts on startup."
+    help_text = """Create a value with an ident."""
+    parser.add_argument("-u"
+                        , "--update"
+                        , dest="update"
+                        , default=None
+                        , help=help_text
+                        )
+
+    help_text = """Create a value with an ident."""
+    parser.add_argument("-d"
+                        , "--delete"
+                        , dest="delete"
+                        , default=None
+                        , help=help_text
+                        )
+
+    help_text = "Use -t or --tests to run test creates on startup."
     parser.add_argument("-t"
                         , "--tests"
                         , type=int
@@ -371,17 +413,23 @@ def main():
 
     if args.process:
         process_init(args.tests)
-    elif args.insert:
-        insert(args.insert)
-    elif args.print_list:
-        print_list()
+    elif args.create:
+        create(args.create)
+    elif args.read_queue:
+        read_queue()
+    elif args.update:
+        # Faking the update for now...
+        create(args.update)
+    elif args.delete:
+        print("No delete function yet.")
+
     else:
         # This else will allow dev to run this script with no args to just run
         # test insert.
         test_queue = MailQueue()
         test_queue = test_inserts(test_queue, 10)
         test_queue = test_inserts(test_queue, 5)
-        test_queue.print_nodes()
+        test_queue.read_nodes()
 
 if __name__ == "__main__":
     main()
