@@ -96,9 +96,10 @@ class MailQueue():
         the queue.
         """
         #print("Read Nodes")
+        return_list = []
         return_dict = {}
         if not self.head:
-            return(return_dict)
+            return(return_list)
         currentNode = self.head
         node_number = 0
         while currentNode:
@@ -108,15 +109,16 @@ class MailQueue():
             return_node = {
                     "date": currentNode.date,
                     "ident": currentNode.ident,
+                    "node": node_number,
                     }
 
-            # Add the new sub dictionary to the return_dict.
-            return_dict[str(node_number)] = return_node
+            # Add the new sub dictionary to the return_list.
+            return_list.append(return_node)
             # Advance to the next node
             currentNode = currentNode.next_node
             node_number += 1
             #print(node_number)
-        return str(return_dict)
+        return str(return_list)
 
     def create(self, message):
         """
@@ -128,7 +130,7 @@ class MailQueue():
         command, ident = message.split(":")
         #print(command, ident)
         date = datetime.datetime.now()
-        offset = datetime.timedelta(days = 5)
+        offset = datetime.timedelta(minutes = 5)
         date = date + offset
 
         # Remove the node from the 
@@ -226,11 +228,6 @@ class Streams():
         print("\n\nUser ended runtime.")
         #print(dir(frame))
         sys.exit(signum)
-
-
-class ControlComms():
-    def __init__(self):
-        print("Creating Controls")
 
 
 class MailClient():
