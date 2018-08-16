@@ -155,7 +155,7 @@ class MailQueue():
         #print(message)
         command, ident = message.split(":")
         date = datetime.datetime.now()
-        offset = datetime.timedelta(days = 5)
+        offset = datetime.timedelta(seconds = 5)
         date = date + offset
 
         found_on_next_node = self._pop_node(ident)
@@ -336,10 +336,11 @@ def main_loop(mail_queue, streams):
         except KeyboardInterrupt:
             break
         if listen_socket in socks:
-            print('whoops')
+            #print('whoops')
             message = listen_socket.recv()
             print("Received message: %s" % message)
             message = message.decode("utf-8")
+            #print('ouch')
             if "read_queue" in message:
                 listen_socket.send_string(str(mail_queue.read_nodes()))
                 #return_dict = mail_queue.read_nodes()
