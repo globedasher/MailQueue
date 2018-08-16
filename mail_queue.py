@@ -97,9 +97,10 @@ class MailQueue():
         """
         #print("Read Nodes")
         return_list = []
-        return_dict = {}
+        #return_dict = {}
         if not self.head:
             return(return_list)
+            #return(return_dict)
         currentNode = self.head
         node_number = 0
         while currentNode:
@@ -107,18 +108,21 @@ class MailQueue():
 
             # Create a nested dictionary for each node in the queue
             return_node = {
+                    "order": node_number,
                     "date": currentNode.date,
                     "ident": currentNode.ident,
                     "node": node_number,
                     }
 
-            # Add the new sub dictionary to the return_list.
+            # Add the new sub dictionary to the return_dict.
+            #return_dict[str(node_number)] = return_node
             return_list.append(return_node)
             # Advance to the next node
             currentNode = currentNode.next_node
             node_number += 1
             #print(node_number)
         return str(return_list)
+        #return str(return_dict)
 
     def create(self, message):
         """
@@ -332,6 +336,7 @@ def main_loop(mail_queue, streams):
         except KeyboardInterrupt:
             break
         if listen_socket in socks:
+            print('whoops')
             message = listen_socket.recv()
             print("Received message: %s" % message)
             message = message.decode("utf-8")
